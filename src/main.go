@@ -25,6 +25,7 @@ func main() {
 	ctx := context.Background()
 	controller.Bind(config)
 	controller.FindLightLoop(*adapter)
+	controller.SendLoop()
 	controller.Listen(ctx)
 
 	// println("scanning...")

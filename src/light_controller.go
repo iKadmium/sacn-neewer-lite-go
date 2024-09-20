@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"tinygo.org/x/bluetooth"
@@ -11,13 +10,13 @@ import (
 
 type LightController struct {
 	sacnClient *SacnClient
-	lights     []*Light
+	lights     map[string]*Light
 }
 
 func NewLightController() *LightController {
 	return &LightController{
 		sacnClient: nil,
-		lights:     []*Light{},
+		lights:     make(map[string]*Light),
 	}
 }
 
@@ -34,25 +33,21 @@ func (lc *LightController) Bind(config *Config) error {
 			return fmt.Errorf("invalid light ID %s: %v", lightConfig.ID, err)
 		}
 		light := NewLight(idBytes, lightConfig.Universe, lightConfig.Address)
-		//light := NewLight(lightConfig.ID, lightConfig.Address, lightConfig.Universe)
-		lc.lights = append(lc.lights, light)
+		lc.lights[lightConfig.ID] = light
 	}
 
 	return nil
 }
 
-func (lc *LightController) handlePacket(packet *SacnDmxPacket) error {
+func (lc *LightController) handlePacket(packet *SacnDmxPacket) {
 	for _, light := range lc.lights {
-		if light.IsConnected() && light.GetUniverse() == packet.Universe {
+		if light.GetUniverse() == packet.Universe {
 			red := packet.DmxData[light.GetAddress()]
 			green := packet.DmxData[light.GetAddress()+1]
 			blue := packet.DmxData[light.GetAddress()+2]
-			if err := light.SetColorRGB(red, green, blue); err != nil {
-				return err
-			}
+			light.SetColorRGB(red, green, blue)
 		}
 	}
-	return nil
 }
 
 func (lc *LightController) Listen(ctx context.Context) error {
@@ -77,19 +72,38 @@ func (lc *LightController) Listen(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				if err := lc.handlePacket(sacnPacket); err != nil {
-					fmt.Fprintf(os.Stderr, "Error handling packet: %v\n", err)
-				}
+				lc.handlePacket(sacnPacket)
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }
 
 func (lc *LightController) FindLightLoop(adapter bluetooth.Adapter) {
+	println("scanning...")
+
+	go func() {
+		err := adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
+			l := lc.lights[device.Address.String()]
+			if l != nil && !l.IsConnected() && device.Address.MAC == l.id {
+				fmt.Println("Found device: ", l.id)
+				l.Connect(device, adapter)
+
+				println("connected to device:", device.Address.String())
+			}
+		})
+		if err != nil {
+			println("error scanning:", err.Error())
+		}
+	}()
+}
+
+func (lc *LightController) SendLoop() {
 	for _, light := range lc.lights {
 		go func(light *Light) {
-			light.FindLoop(adapter)
+			light.SendLoop(time.Millisecond * 50)
+		}(light)
+		go func(light *Light) {
+			light.HeartbeatLoop(time.Second * 2)
 		}(light)
 	}
 }
