@@ -125,7 +125,7 @@ func (l *Light) Connect(peripheral bluetooth.ScanResult, adapter *bluetooth.Adap
 }
 
 func (l *Light) Disconnect() error {
-	fmt.Printf("Disconnecting from %v\n", l.GetName())
+	fmt.Printf("Disconnecting from %v\n", l.id.String())
 	if l.peripheral != nil {
 		err := l.peripheral.Disconnect()
 		l.peripheral = nil
@@ -135,13 +135,6 @@ func (l *Light) Disconnect() error {
 		return err
 	}
 	return nil
-}
-
-func (l *Light) GetName() string {
-	if l.peripheral != nil {
-		return "some name"
-	}
-	return ""
 }
 
 func (l *Light) GetAddress() uint16 {
