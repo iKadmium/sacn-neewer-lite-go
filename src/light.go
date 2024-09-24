@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"golang.design/x/mainthread"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -83,15 +84,20 @@ func (l *Light) Connect(peripheral bluetooth.ScanResult, adapter *bluetooth.Adap
 		return fmt.Errorf("error parsing UUID: %v", err)
 	}
 
-	device, err := adapter.Connect(peripheral.Address, bluetooth.ConnectionParams{})
-
+	var device bluetooth.Device
+	mainthread.Call(func() {
+		device, err = adapter.Connect(peripheral.Address, bluetooth.ConnectionParams{})
+	})
 	if err != nil {
-		return fmt.Errorf("error connecting: %v", err)
+		err = fmt.Errorf("error connecting: %v", err)
 	}
 
 	l.peripheral = &device
 
-	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUuid})
+	var services []bluetooth.DeviceService
+	mainthread.Call(func() {
+		services, err = device.DiscoverServices([]bluetooth.UUID{serviceUuid})
+	})
 	if err != nil {
 		return fmt.Errorf("error discovering services: %v", err)
 	}
@@ -99,7 +105,11 @@ func (l *Light) Connect(peripheral bluetooth.ScanResult, adapter *bluetooth.Adap
 	if len(services) != 1 {
 		return fmt.Errorf("no services found")
 	}
-	characteristics, err := services[0].DiscoverCharacteristics([]bluetooth.UUID{writeCharacteristicUuid})
+
+	var characteristics []bluetooth.DeviceCharacteristic
+	mainthread.Call(func() {
+		characteristics, err = services[0].DiscoverCharacteristics([]bluetooth.UUID{writeCharacteristicUuid})
+	})
 	if err != nil {
 		return fmt.Errorf("error discovering characteristics: %v", err)
 	}
@@ -108,6 +118,9 @@ func (l *Light) Connect(peripheral bluetooth.ScanResult, adapter *bluetooth.Adap
 	}
 	l.write_char = &characteristics[0]
 
+	mainthread.Call(func() {
+		characteristics, err = services[0].DiscoverCharacteristics([]bluetooth.UUID{readCharecteristicUuid})
+	})
 	characteristics, err = services[0].DiscoverCharacteristics([]bluetooth.UUID{readCharecteristicUuid})
 	if err != nil {
 		return fmt.Errorf("error discovering characteristics: %v", err)
@@ -117,9 +130,11 @@ func (l *Light) Connect(peripheral bluetooth.ScanResult, adapter *bluetooth.Adap
 	}
 	l.read_char = &characteristics[0]
 	l.last_read_time = time.Now()
-	l.read_char.EnableNotifications(func(data []byte) {
-		println("heartbeat from:", l.id.String())
-		l.last_read_time = time.Now()
+	mainthread.Call(func() {
+		l.read_char.EnableNotifications(func(data []byte) {
+			println("heartbeat from:", l.id.String())
+			l.last_read_time = time.Now()
+		})
 	})
 	return err
 }
@@ -127,7 +142,10 @@ func (l *Light) Connect(peripheral bluetooth.ScanResult, adapter *bluetooth.Adap
 func (l *Light) Disconnect() error {
 	fmt.Printf("Disconnecting from %v\n", l.id.String())
 	if l.peripheral != nil {
-		err := l.peripheral.Disconnect()
+		var err error
+		mainthread.Call(func() {
+			err = l.peripheral.Disconnect()
+		})
 		l.peripheral = nil
 		l.write_char = nil
 		l.read_char = nil

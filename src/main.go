@@ -4,13 +4,17 @@ import (
 	"context"
 	"os"
 
+	"golang.design/x/mainthread"
 	"tinygo.org/x/bluetooth"
 )
 
 var adapter = bluetooth.DefaultAdapter
 
 func main() {
+	mainthread.Init(realMain)
+}
 
+func realMain() {
 	if len(os.Args) > 1 && os.Args[1] == "scan" {
 		err := adapter.Enable()
 		if err != nil {
@@ -31,6 +35,7 @@ func main() {
 					println("\t", "RSSI", device.RSSI)
 					println("\t", "Name", device.LocalName())
 					println("\t", "MAC", device.Address.MAC.String())
+
 				}
 			}
 		})
