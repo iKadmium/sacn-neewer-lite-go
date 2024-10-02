@@ -5,23 +5,25 @@ import (
 	"fmt"
 	"time"
 
+	sacn "sacn_neewer_lite_go/sacn"
+
 	"tinygo.org/x/bluetooth"
 )
 
 type LightController struct {
-	sacnClient *SacnClient
-	lights     map[string]*Light
+	sacnClient *sacn.SacnClient
+	lights     map[string]*NeewerLight
 }
 
 func NewLightController() *LightController {
 	return &LightController{
 		sacnClient: nil,
-		lights:     make(map[string]*Light),
+		lights:     make(map[string]*NeewerLight),
 	}
 }
 
 func (lc *LightController) Bind(config *Config) error {
-	client, err := NewSacnClient(config.GetUniverses())
+	client, err := sacn.NewSacnClient(config.GetUniverses())
 	if err != nil {
 		return err
 	}
@@ -39,7 +41,7 @@ func (lc *LightController) Bind(config *Config) error {
 	return nil
 }
 
-func (lc *LightController) handlePacket(packet *SacnDmxPacket) {
+func (lc *LightController) handlePacket(packet *sacn.SacnDmxPacket) {
 	for _, light := range lc.lights {
 		if light.GetUniverse() == packet.Universe {
 			red := packet.DmxData[light.GetAddress()]
@@ -51,31 +53,17 @@ func (lc *LightController) handlePacket(packet *SacnDmxPacket) {
 }
 
 func (lc *LightController) Listen(ctx context.Context) error {
-	buf := make([]byte, 1024)
-	socket := lc.sacnClient.GetConn()
-
 	println("Listening for sACN packets...")
 
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("Received SIGTERM, shutting down...")
-			return nil
-		default:
-			n, err := socket.Read(buf)
-			if err != nil {
-				return err
-			}
-			packet := buf[:n]
-			if IsDataPacket(packet) {
-				sacnPacket, err := FromBytes(packet)
-				if err != nil {
-					return err
-				}
-				lc.handlePacket(sacnPacket)
-			}
-		}
+	select {
+	case <-ctx.Done():
+		fmt.Println("Received SIGTERM, shutting down...")
+		return nil
+	default:
+		lc.sacnClient.Listen(lc.handlePacket)
 	}
+
+	return nil
 }
 
 func (lc *LightController) FindLightLoop(adapter bluetooth.Adapter) {
@@ -99,10 +87,10 @@ func (lc *LightController) FindLightLoop(adapter bluetooth.Adapter) {
 
 func (lc *LightController) SendLoop() {
 	for _, light := range lc.lights {
-		go func(light *Light) {
+		go func(light *NeewerLight) {
 			light.SendLoop(time.Millisecond * 50)
 		}(light)
-		go func(light *Light) {
+		go func(light *NeewerLight) {
 			light.HeartbeatLoop(time.Second * 2)
 		}(light)
 	}

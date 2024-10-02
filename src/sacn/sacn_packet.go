@@ -1,4 +1,4 @@
-package main
+package sacn
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ func NewSacnDmxPacket(sourceName string, universe uint16, priority, sequenceNumb
 	}
 }
 
-func FromBytes(packetBytes []byte) (*SacnDmxPacket, error) {
+func SacnPacketFromBytes(packetBytes []byte) (*SacnDmxPacket, error) {
 	if len(packetBytes) < 38 {
 		return nil, errors.New("byte array too short")
 	}

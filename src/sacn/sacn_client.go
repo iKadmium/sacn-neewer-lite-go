@@ -1,8 +1,9 @@
-package main
+package sacn
 
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"golang.org/x/net/ipv4"
 )
@@ -10,8 +11,10 @@ import (
 const SACN_PORT = 5568
 
 type SacnClient struct {
-	conn      *net.UDPConn
-	universes []uint16
+	conn          *net.UDPConn
+	universes     []uint16
+	packetCount   uint16
+	lastPrintTime time.Time
 }
 
 func NewSacnClient(universes []uint16) (*SacnClient, error) {
@@ -34,7 +37,7 @@ func NewSacnClient(universes []uint16) (*SacnClient, error) {
 		}
 	}
 
-	return &SacnClient{conn: conn, universes: universes}, nil
+	return &SacnClient{conn: conn, universes: universes, packetCount: 0, lastPrintTime: time.Now()}, nil
 }
 
 func (c *SacnClient) Disconnect() error {
@@ -53,6 +56,43 @@ func (c *SacnClient) Disconnect() error {
 
 func (c *SacnClient) GetConn() *net.UDPConn {
 	return c.conn
+}
+
+func (c *SacnClient) Listen(handler func(*SacnDmxPacket)) {
+	buf := make([]byte, 1024)
+
+	go func() {
+		timer := time.NewTimer(time.Second)
+		for range timer.C {
+			fmt.Printf("sACN packets received in the last second: %d\n", c.packetCount)
+			c.packetCount = 0
+			c.lastPrintTime = time.Now()
+			timer.Reset(time.Second)
+		}
+	}()
+
+	for {
+		n, _, err := c.conn.ReadFromUDP(buf)
+		if err != nil {
+			fmt.Println("Error reading from UDP connection:", err)
+			return
+		}
+
+		if IsDataPacket(buf[:n]) {
+			packet, err := SacnPacketFromBytes(buf[:n])
+
+			if err != nil {
+				fmt.Println("Error parsing sACN packet:", err)
+				continue
+			}
+
+			handler(packet)
+
+			// Packet counting logic
+			c.packetCount++
+		}
+
+	}
 }
 
 // func main() {
