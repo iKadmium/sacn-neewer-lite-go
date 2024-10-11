@@ -7,16 +7,28 @@ import (
 )
 
 type Status struct {
-	text          string
-	color         tcell.Color
-	event_counter *EventRateCounter
+	text         string
+	textColor    tcell.Color
+	eventCounter *EventRateCounter
+	colorTracker *ColorTracker
 }
 
-func NewStatus() Status {
+func NewStatus(withEventCounter bool, withColorTracker bool) Status {
+	var eventCounter *EventRateCounter
+	if withEventCounter {
+		eventCounter = NewEventRateCounter(time.Second)
+	}
+
+	var colorTracker *ColorTracker
+	if withColorTracker {
+		colorTracker = NewColorTracker()
+	}
+
 	return Status{
-		text:          "No data",
-		color:         tcell.ColorReset,
-		event_counter: NewEventRateCounter(time.Second),
+		text:         "No data",
+		textColor:    tcell.ColorReset,
+		eventCounter: eventCounter,
+		colorTracker: colorTracker,
 	}
 }
 
@@ -24,13 +36,13 @@ func (s *Status) GetText() string {
 	return s.text
 }
 
-func (s *Status) GetColor() tcell.Color {
-	return s.color
+func (s *Status) GetTextColor() tcell.Color {
+	return s.textColor
 }
 
 func (s *Status) Update(text string, color tcell.Color) {
 	s.text = text
-	s.color = color
+	s.textColor = color
 }
 
 func (s *Status) SetErr(err error) {
@@ -38,9 +50,17 @@ func (s *Status) SetErr(err error) {
 }
 
 func (s *Status) Increment() {
-	s.event_counter.Increment()
+	s.eventCounter.Increment()
 }
 
 func (s *Status) LastCount() int {
-	return s.event_counter.LastCount()
+	return s.eventCounter.LastCount()
+}
+
+func (s *Status) HasUpdateRate() bool {
+	return s.eventCounter != nil
+}
+
+func (s *Status) GetColorTracker() *ColorTracker {
+	return s.colorTracker
 }

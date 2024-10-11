@@ -44,7 +44,7 @@ func NewLight(id bluetooth.MAC, universe uint16, address uint16) *NeewerLight {
 		brightness:     0,
 		dirty:          true,
 		last_send_time: time.Unix(0, 0),
-		status:         status.NewStatus(),
+		status:         status.NewStatus(true, true),
 	}
 }
 
@@ -56,7 +56,7 @@ func getChecksum(sendValue []byte) byte {
 	return checkSum
 }
 
-func (l *NeewerLight) setColorHSI(hue uint16, saturation, brightness byte) {
+func (l *NeewerLight) setColorHSI(hue uint16, saturation, brightness uint8) {
 	if l.hue != hue || l.saturation != saturation || l.brightness != brightness {
 		l.dirty = true
 		l.hue = hue
@@ -85,6 +85,13 @@ func (l *NeewerLight) SendColor() error {
 
 func (l *NeewerLight) SetColorRGB(red, green, blue byte) {
 	hue, saturation, intensity := RgbToHsv(red, green, blue)
+	// if intensity == 0 && l.brightness > 0 && l.brightness < 250 {
+	// 	// hmm
+	// 	l.status.Update("Flicker Detected", tcell.ColorRed)
+	// } else {
+	// 	l.status.Update("Receiving", tcell.ColorGreen)
+	// }
+	l.status.GetColorTracker().Update(tcell.NewRGBColor(int32(red), int32(green), int32(blue)))
 	l.setColorHSI(hue, saturation, intensity)
 }
 

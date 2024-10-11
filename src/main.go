@@ -23,9 +23,6 @@ func ScanLoop() {
 		return
 	}
 
-	// flex := tview.NewFlex()
-	// flex.SetDirection(tview.FlexRow).SetBorder(true).SetTitle("Scanning...").SetTitleAlign(tview.AlignLeft)
-
 	seenDevices := make(map[string]struct{})
 	tree := tview.NewTreeView()
 
@@ -42,36 +39,34 @@ func ScanLoop() {
 
 	app := tview.NewApplication().SetRoot(tree, true)
 
-	go func() {
-		adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
-			deviceID := device.Address.String()
-			if _, found := seenDevices[deviceID]; !found {
-				seenDevices[deviceID] = struct{}{}
+	go adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
+		deviceID := device.Address.String()
+		if _, found := seenDevices[deviceID]; !found {
+			seenDevices[deviceID] = struct{}{}
 
-				if (len(os.Args) > 2 && os.Args[2] == "all") || device.LocalName() != "" {
-					heading := deviceID
-					if device.LocalName() != "" {
-						heading = device.LocalName()
-					}
-					node := tview.NewTreeNode(heading)
-					node.SetExpanded(false)
-					node.SetSelectable(true)
-					node.SetReference(device)
-
-					node.AddChild(tview.NewTreeNode("ID: " + deviceID))
-					if device.LocalName() != "" {
-						node.AddChild(tview.NewTreeNode("Name: " + device.LocalName()))
-					}
-					node.AddChild(tview.NewTreeNode("RSSI: " + strconv.Itoa(int(device.RSSI))))
-					node.AddChild(tview.NewTreeNode("MAC: " + device.Address.MAC.String()))
-
-					app.QueueUpdate(func() {
-						root.AddChild(node)
-					})
+			if (len(os.Args) > 2 && os.Args[2] == "all") || device.LocalName() != "" {
+				heading := deviceID
+				if device.LocalName() != "" {
+					heading = device.LocalName()
 				}
+				node := tview.NewTreeNode(heading)
+				node.SetExpanded(false)
+				node.SetSelectable(true)
+				node.SetReference(device)
+
+				node.AddChild(tview.NewTreeNode("ID: " + deviceID))
+				if device.LocalName() != "" {
+					node.AddChild(tview.NewTreeNode("Name: " + device.LocalName()))
+				}
+				node.AddChild(tview.NewTreeNode("RSSI: " + strconv.Itoa(int(device.RSSI))))
+				node.AddChild(tview.NewTreeNode("MAC: " + device.Address.MAC.String()))
+
+				app.QueueUpdate(func() {
+					root.AddChild(node)
+				})
 			}
-		})
-	}()
+		}
+	})
 
 	if err := app.Run(); err != nil {
 		panic(err)
@@ -108,8 +103,8 @@ func realMain() {
 			terminal_ui.app.Stop()
 		}
 
-		terminal_ui.Setup(config, controller.GetAppStatus(), controller.GetSacnStatus(), controller.GetLightStatuses(), cleanup)
-		terminal_ui.Update(ctx)
+		terminal_ui.SetupSend(config, controller.GetAppStatus(), controller.GetSacnStatus(), controller.GetLightStatuses(), cleanup)
+		terminal_ui.UpdateSend(ctx)
 
 		controller.SendLoop(ctx)
 		controller.Listen(ctx)

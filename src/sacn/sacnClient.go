@@ -39,7 +39,7 @@ func NewSacnClient(universes []uint16) (*SacnClient, error) {
 		}
 	}
 
-	return &SacnClient{conn: conn, universes: universes, status: status.NewStatus()}, nil
+	return &SacnClient{conn: conn, universes: universes, status: status.NewStatus(true, false)}, nil
 }
 
 func (c *SacnClient) Disconnect() error {

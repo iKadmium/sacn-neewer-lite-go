@@ -26,7 +26,7 @@ func (ui *TerminalUI) Run() error {
 	return ui.app.Run()
 }
 
-func (ui *TerminalUI) PoorUpdate(ctx context.Context) {
+func (ui *TerminalUI) UpdateSendText(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -45,7 +45,7 @@ func (ui *TerminalUI) PoorUpdate(ctx context.Context) {
 	}()
 }
 
-func (ui *TerminalUI) Update(ctx context.Context) {
+func (ui *TerminalUI) UpdateSend(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -53,71 +53,35 @@ func (ui *TerminalUI) Update(ctx context.Context) {
 				return
 			default:
 				for _, statusUi := range ui.statusList {
-					ui.app.QueueUpdateDraw(func() {
-						statusUi.textView.SetText(statusUi.status.GetText())
-						statusUi.textView.SetTextColor(statusUi.status.GetColor())
-						if statusUi.updateRateView != nil {
-							statusUi.updateRateView.SetText("Update Rate: " + strconv.Itoa(statusUi.status.LastCount()))
-						}
-					})
+					statusUi.Update(ui.app)
 				}
 
-				time.Sleep(time.Second / 10)
+				time.Sleep(time.Second / 60)
 			}
 		}
 	}()
 }
 
-func (ui *TerminalUI) Setup(config *Config, app_status_tracker *status.Status, sacn_status_tracker *status.Status, light_status_trackers map[string]*status.Status, cancel func()) {
+func (ui *TerminalUI) SetupSend(config *Config, app_status_tracker *status.Status, sacn_status_tracker *status.Status, light_status_trackers map[string]*status.Status, cancel func()) {
 	root := tview.NewFlex()
 	root.SetTitle("Sacn-Neewer-Lite").SetTitleAlign(tview.AlignLeft).SetBorder(true)
 	root.SetDirection(tview.FlexRow)
 
-	app_status_container := tview.NewFlex()
-	app_status_container.SetTitle("Status").SetTitleAlign(tview.AlignLeft).SetBorder(true)
-	app_status_container.SetDirection(tview.FlexRow)
-	root.AddItem(app_status_container, 3, 1, false)
-
-	app_status_text := tview.NewTextView()
-	app_status_text.SetText(app_status_tracker.GetText())
-	app_status_container.AddItem(app_status_text, 0, 1, false)
-	ui.statusList = append(ui.statusList, NewStatusUiTuple(app_status_tracker, app_status_text, nil))
-
-	sacn_container := tview.NewFlex()
-	sacn_container.SetTitle("Sacn").SetTitleAlign(tview.AlignLeft).SetBorder(true)
-	sacn_container.SetDirection(tview.FlexRow)
-	root.AddItem(sacn_container, 4, 1, false)
-
-	sacn_status_text := tview.NewTextView()
-	sacn_status_text.SetText(sacn_status_tracker.GetText())
-	sacn_container.AddItem(sacn_status_text, 0, 1, false)
-	sacn_update_rate_text := tview.NewTextView()
-	sacn_container.AddItem(sacn_update_rate_text, 0, 1, false)
-	ui.statusList = append(ui.statusList, NewStatusUiTuple(sacn_status_tracker, sacn_status_text, sacn_update_rate_text))
+	ui.statusList = append(ui.statusList, NewStatusUiTuple(app_status_tracker, "Status", true, root, []string{}))
+	ui.statusList = append(ui.statusList, NewStatusUiTuple(sacn_status_tracker, "sACN", true, root, []string{}))
 
 	lights_container := tview.NewFlex()
 	lights_container.SetTitle("Lights").SetTitleAlign(tview.AlignLeft).SetBorder(true)
 	lights_container.SetDirection(tview.FlexColumn)
-	root.AddItem(lights_container, 8, 1, false)
+	root.AddItem(lights_container, 0, 1, false)
 
 	for _, lightConfig := range config.Lights {
-		container := tview.NewFlex()
-		container.SetDirection(tview.FlexRow)
-		container.SetTitle(lightConfig.ID).SetTitleAlign(tview.AlignLeft).SetBorder(true)
-
 		universeText := "Universe: " + strconv.Itoa(int(lightConfig.Universe))
-		container.AddItem(tview.NewTextView().SetText(universeText), 1, 1, false)
 		addressText := "Address: " + strconv.Itoa(int(lightConfig.Address))
-		container.AddItem(tview.NewTextView().SetText(addressText), 1, 1, false)
-
-		statusText := tview.NewTextView()
-		container.AddItem(statusText, 1, 1, false)
-
-		rateText := tview.NewTextView()
-		container.AddItem(rateText, 1, 1, false)
-
-		ui.statusList = append(ui.statusList, NewStatusUiTuple(light_status_trackers[lightConfig.ID], statusText, rateText))
-		lights_container.AddItem(container, 0, 1, false)
+		ui.statusList = append(ui.statusList, NewStatusUiTuple(light_status_trackers[lightConfig.ID], lightConfig.ID, false, lights_container, []string{
+			universeText,
+			addressText,
+		}))
 	}
 
 	root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {

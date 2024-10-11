@@ -37,7 +37,7 @@ func NewLightController(config *Config) (*LightController, error) {
 	return &LightController{
 		sacnClient: client,
 		lights:     lights,
-		status:     status.NewStatus(),
+		status:     status.NewStatus(false, false),
 	}, err
 }
 
