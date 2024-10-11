@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sacn_neewer_lite_go/status"
+	"strconv"
 
 	"github.com/gdamore/tcell/v2"
 	"golang.org/x/net/ipv4"
@@ -15,6 +16,7 @@ const SACN_PORT = 5568
 type SacnClient struct {
 	conn      *net.UDPConn
 	universes []uint16
+	lastSeq   map[uint16]uint8
 
 	status status.Status
 }
@@ -39,7 +41,7 @@ func NewSacnClient(universes []uint16) (*SacnClient, error) {
 		}
 	}
 
-	return &SacnClient{conn: conn, universes: universes, status: status.NewStatus(true, false)}, nil
+	return &SacnClient{conn: conn, universes: universes, status: status.NewStatus(true, false), lastSeq: make(map[uint16]uint8)}, nil
 }
 
 func (c *SacnClient) Disconnect() error {
@@ -80,13 +82,38 @@ func (c *SacnClient) Listen(ctx context.Context, handler func(*SacnDmxPacket)) {
 
 				if err != nil {
 					c.status.Update("Error parsing sACN packet", tcell.ColorRed)
+					continue
 				}
 
-				c.status.Increment()
-				handler(packet)
+				// Check sequence number
+				universe := packet.Universe
+				seqNum := packet.SequenceNumber
+				if c.isSequenceNumberValid(universe, seqNum) {
+					c.updateSequenceNumber(universe, seqNum)
+					c.status.Update("Valid packet received "+strconv.Itoa(int(seqNum)), tcell.ColorGreen)
+					c.status.Increment()
+					handler(packet)
+				} else {
+					c.status.Update("Out of order packet received", tcell.ColorYellow)
+				}
 			}
 		}
 	}
+}
+
+func (c *SacnClient) isSequenceNumberValid(universe uint16, seqNum uint8) bool {
+	lastSeq, exists := c.lastSeq[universe]
+	if !exists {
+		return true
+	}
+	if seqNum > lastSeq || (lastSeq > 192 && seqNum < 64) {
+		return true
+	}
+	return false
+}
+
+func (c *SacnClient) updateSequenceNumber(universe uint16, seqNum uint8) {
+	c.lastSeq[universe] = seqNum
 }
 
 func (c *SacnClient) GetStatus() *status.Status {
