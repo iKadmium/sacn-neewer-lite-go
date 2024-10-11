@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"sacn_neewer_lite_go/status"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
+	"github.com/godbus/dbus/v5"
 	"golang.design/x/mainthread"
 	"tinygo.org/x/bluetooth"
 )
@@ -26,6 +30,8 @@ type NeewerLight struct {
 	last_read_time time.Time
 	dirty          bool
 	last_send_time time.Time
+
+	status status.Status
 }
 
 func NewLight(id bluetooth.MAC, universe uint16, address uint16) *NeewerLight {
@@ -38,6 +44,7 @@ func NewLight(id bluetooth.MAC, universe uint16, address uint16) *NeewerLight {
 		brightness:     0,
 		dirty:          true,
 		last_send_time: time.Unix(0, 0),
+		status:         status.NewStatus(),
 	}
 }
 
@@ -70,7 +77,7 @@ func (l *NeewerLight) SendColor() error {
 		colorCmd = append(colorCmd, getChecksum(colorCmd))
 
 		_, err := l.write_char.WriteWithoutResponse(colorCmd)
-		println("sent color to:", l.id.String())
+		l.status.Increment()
 		return err
 	}
 	return nil
@@ -82,17 +89,24 @@ func (l *NeewerLight) SetColorRGB(red, green, blue byte) {
 }
 
 func (l *NeewerLight) Connect(peripheral bluetooth.ScanResult, adapter *bluetooth.Adapter) error {
+	l.status.Update("Connecting", tcell.ColorYellow)
 	writeCharacteristicUuid, err := bluetooth.ParseUUID(WriteCharacteristicUuid)
 	if err != nil {
-		return fmt.Errorf("error parsing UUID: %v", err)
+		err = fmt.Errorf("error parsing UUID: %v", err)
+		l.status.SetErr(err)
+		return err
 	}
 	readCharecteristicUuid, err := bluetooth.ParseUUID(ReadCharecteristicUuid)
 	if err != nil {
-		return fmt.Errorf("error parsing UUID: %v", err)
+		err = fmt.Errorf("error parsing characteristic UUID: %v", err)
+		l.status.SetErr(err)
+		return err
 	}
 	serviceUuid, err := bluetooth.ParseUUID(ServiceUuid)
 	if err != nil {
-		return fmt.Errorf("error parsing UUID: %v", err)
+		err = fmt.Errorf("error parsing service UUID: %v", err)
+		l.status.SetErr(err)
+		return err
 	}
 
 	var device bluetooth.Device
@@ -101,6 +115,8 @@ func (l *NeewerLight) Connect(peripheral bluetooth.ScanResult, adapter *bluetoot
 	})
 	if err != nil {
 		err = fmt.Errorf("error connecting: %v", err)
+		l.status.SetErr(err)
+		return err
 	}
 
 	l.peripheral = &device
@@ -110,11 +126,15 @@ func (l *NeewerLight) Connect(peripheral bluetooth.ScanResult, adapter *bluetoot
 		services, err = device.DiscoverServices([]bluetooth.UUID{serviceUuid})
 	})
 	if err != nil {
-		return fmt.Errorf("error discovering services: %v", err)
+		err = fmt.Errorf("error discovering services: %v", err)
+		l.status.SetErr(err)
+		return err
 	}
 
 	if len(services) != 1 {
-		return fmt.Errorf("no services found")
+		err = fmt.Errorf("no services found")
+		l.status.SetErr(err)
+		return err
 	}
 
 	var characteristics []bluetooth.DeviceCharacteristic
@@ -122,37 +142,46 @@ func (l *NeewerLight) Connect(peripheral bluetooth.ScanResult, adapter *bluetoot
 		characteristics, err = services[0].DiscoverCharacteristics([]bluetooth.UUID{writeCharacteristicUuid})
 	})
 	if err != nil {
-		return fmt.Errorf("error discovering characteristics: %v", err)
+		err = fmt.Errorf("error discovering characteristics: %v", err)
+		l.status.SetErr(err)
+		return err
 	}
 	if len(characteristics) != 1 {
-		return fmt.Errorf("no characteristics found")
+		err = fmt.Errorf("no characteristics found")
+		l.status.SetErr(err)
+		return err
 	}
 	l.write_char = &characteristics[0]
 
 	mainthread.Call(func() {
 		characteristics, err = services[0].DiscoverCharacteristics([]bluetooth.UUID{readCharecteristicUuid})
 	})
-	characteristics, err = services[0].DiscoverCharacteristics([]bluetooth.UUID{readCharecteristicUuid})
 	if err != nil {
-		return fmt.Errorf("error discovering characteristics: %v", err)
+		err = fmt.Errorf("error discovering characteristics: %v", err)
+		l.status.SetErr(err)
+		return err
 	}
 	if len(characteristics) != 1 {
-		return fmt.Errorf("no characteristics found")
+		err = fmt.Errorf("no characteristics found")
+		l.status.SetErr(err)
+		return err
 	}
 	l.read_char = &characteristics[0]
 	l.last_read_time = time.Now()
 	mainthread.Call(func() {
 		l.read_char.EnableNotifications(func(data []byte) {
-			println("heartbeat from:", l.id.String())
 			l.last_read_time = time.Now()
 		})
 	})
-	return err
+
+	l.status.Update("Connected", tcell.ColorGreen)
+
+	return nil
 }
 
 func (l *NeewerLight) Disconnect() error {
-	fmt.Printf("Disconnecting from %v\n", l.id.String())
 	if l.peripheral != nil {
+		l.status.Update("Disconnecting", tcell.ColorYellow)
 		var err error
 		mainthread.Call(func() {
 			err = l.peripheral.Disconnect()
@@ -160,6 +189,8 @@ func (l *NeewerLight) Disconnect() error {
 		l.peripheral = nil
 		l.write_char = nil
 		l.read_char = nil
+
+		l.status.Update("Disconnected", tcell.ColorRed)
 
 		return err
 	}
@@ -181,30 +212,48 @@ func (l *NeewerLight) IsConnected() bool {
 	return true
 }
 
-func (l *NeewerLight) SendLoop(interval time.Duration) {
+func (l *NeewerLight) SendLoop(ctx context.Context, interval time.Duration) {
 	for {
-		if l.IsConnected() {
-			err := l.SendColor()
-			if err != nil {
-				fmt.Println("Error sending color:", err)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			{
+				if l.IsConnected() {
+					err := l.SendColor()
+					if err != nil {
+						dbusErr, isDbusErr := err.(dbus.Error)
+						if !(isDbusErr && dbusErr.Name == "org.bluez.Error.InProgress") {
+							err = fmt.Errorf("error sending color: %v", err)
+							l.status.SetErr(err)
+						}
+					} else {
+						l.status.Update("Sending", tcell.ColorGreen)
+					}
+				}
+				time.Sleep(interval)
 			}
 		}
-		time.Sleep(interval)
 	}
 }
 
-func (l *NeewerLight) HeartbeatLoop(interval time.Duration) {
+func (l *NeewerLight) HeartbeatLoop(ctx context.Context, interval time.Duration) {
 	for {
-		if l.IsConnected() {
-			l.write_char.WriteWithoutResponse([]byte{120, 133, 0, 253})
-			time.Sleep(interval)
-			bytes := make([]byte, 20)
-			_, _ = l.read_char.Read(bytes)
-			if l.last_read_time.Add(interval).Before(time.Now()) {
-				l.Disconnect()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if l.IsConnected() {
+				l.write_char.WriteWithoutResponse([]byte{120, 133, 0, 253})
+				time.Sleep(interval)
+				bytes := make([]byte, 20)
+				_, _ = l.read_char.Read(bytes)
+				if l.last_read_time.Add(interval).Before(time.Now()) {
+					l.Disconnect()
+				}
 			}
+			time.Sleep(interval)
 		}
-		time.Sleep(interval)
 	}
 }
 
@@ -214,4 +263,8 @@ func (l *NeewerLight) GetLastReadTime() time.Time {
 
 func (l *NeewerLight) GetID() bluetooth.MAC {
 	return l.id
+}
+
+func (l *NeewerLight) GetStatus() *status.Status {
+	return &l.status
 }

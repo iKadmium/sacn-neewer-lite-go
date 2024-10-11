@@ -17,9 +17,14 @@ type Config struct {
 }
 
 func (c *Config) GetUniverses() []uint16 {
-	universes := make([]uint16, len(c.Lights))
-	for i, light := range c.Lights {
-		universes[i] = light.Universe
+	universeSet := make(map[uint16]struct{})
+	for _, light := range c.Lights {
+		universeSet[light.Universe] = struct{}{}
+	}
+
+	universes := make([]uint16, 0, len(universeSet))
+	for universe := range universeSet {
+		universes = append(universes, universe)
 	}
 	return universes
 }
@@ -43,13 +48,3 @@ func ConfigFromFile(path string) (*Config, error) {
 
 	return &config, nil
 }
-
-// func main() {
-// 	config, err := ConfigFromFile("path/to/config.json")
-// 	if err != nil {
-// 		fmt.Println("Error:", err)
-// 		return
-// 	}
-
-// 	fmt.Println("Universes:", config.GetUniverses())
-// }
