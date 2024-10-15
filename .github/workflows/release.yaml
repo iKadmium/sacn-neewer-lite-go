@@ -26,4 +26,3 @@ jobs:
         goarch: ${{ matrix.goarch }}
         goversion: "1.21"
         project_path: "./src"
-        extra_files: LICENSE README.md
