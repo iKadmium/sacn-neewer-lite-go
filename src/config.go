@@ -16,6 +16,12 @@ type Config struct {
 	Lights []LightConfig `json:"lights"`
 }
 
+func NewConfig() Config {
+	return Config{
+		Lights: make([]LightConfig, 0),
+	}
+}
+
 func (c *Config) GetUniverses() []uint16 {
 	universeSet := make(map[uint16]struct{})
 	for _, light := range c.Lights {
@@ -47,4 +53,21 @@ func ConfigFromFile(path string) (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func ConfigFromFileOrNew(path string) *Config {
+	config, err := ConfigFromFile(path)
+	if err != nil {
+		return &Config{}
+	}
+	return config
+}
+
+func (c *Config) Save(path string) error {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
 }
