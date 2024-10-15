@@ -13,7 +13,10 @@ jobs:
           go-version: '1.21.x'
       - name: Install dependencies
         run: go get .
+        working-directory: ./src
       - name: Build
         run: go build -v ./...
+        working-directory: ./src
       - name: Test with the Go CLI
         run: go test
+        working-directory: ./src
