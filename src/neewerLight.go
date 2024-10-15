@@ -34,7 +34,7 @@ type NeewerLight struct {
 	status status.Status
 }
 
-func NewLight(id bluetooth.MAC, universe uint16, address uint16) *NeewerLight {
+func NewLight(id bluetooth.MAC, universe uint16, address uint16, resetContext context.Context) *NeewerLight {
 	return &NeewerLight{
 		id:             id,
 		universe:       universe,
@@ -44,7 +44,7 @@ func NewLight(id bluetooth.MAC, universe uint16, address uint16) *NeewerLight {
 		brightness:     0,
 		dirty:          true,
 		last_send_time: time.Unix(0, 0),
-		status:         status.NewStatus(true, true),
+		status:         status.NewStatus(true, true, resetContext),
 	}
 }
 

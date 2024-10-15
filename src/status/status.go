@@ -1,6 +1,7 @@
 package status
 
 import (
+	"context"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -13,10 +14,10 @@ type Status struct {
 	colorTracker *ColorTracker
 }
 
-func NewStatus(withEventCounter bool, withColorTracker bool) Status {
+func NewStatus(withEventCounter bool, withColorTracker bool, resetContext context.Context) Status {
 	var eventCounter *EventRateCounter
 	if withEventCounter {
-		eventCounter = NewEventRateCounter(time.Second)
+		eventCounter = NewEventRateCounter(time.Second, resetContext)
 	}
 
 	var colorTracker *ColorTracker

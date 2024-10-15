@@ -21,7 +21,7 @@ type SacnClient struct {
 	status status.Status
 }
 
-func NewSacnClient(universes []uint16) (*SacnClient, error) {
+func NewSacnClient(universes []uint16, resetContext context.Context) (*SacnClient, error) {
 	addr := &net.UDPAddr{
 		IP:   net.IPv4zero,
 		Port: SACN_PORT,
@@ -41,7 +41,7 @@ func NewSacnClient(universes []uint16) (*SacnClient, error) {
 		}
 	}
 
-	return &SacnClient{conn: conn, universes: universes, status: status.NewStatus(true, false), lastSeq: make(map[uint16]uint8)}, nil
+	return &SacnClient{conn: conn, universes: universes, status: status.NewStatus(true, false, resetContext), lastSeq: make(map[uint16]uint8)}, nil
 }
 
 func (c *SacnClient) Disconnect() error {

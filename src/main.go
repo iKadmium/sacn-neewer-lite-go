@@ -88,12 +88,14 @@ func realMain() {
 			return
 		}
 
-		controller, err := NewLightController(config)
+		ctx, cancel := context.WithCancel(context.Background())
+
+		controller, err := NewLightController(config, ctx)
 		if err != nil {
 			println("error creating light controller:", err.Error())
+			cancel()
 			return
 		}
-		ctx, cancel := context.WithCancel(context.Background())
 		controller.FindLightLoop(ctx, *adapter)
 
 		terminal_ui := NewTerminalUI()

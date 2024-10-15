@@ -18,8 +18,8 @@ type LightController struct {
 	status     status.Status
 }
 
-func NewLightController(config *Config) (*LightController, error) {
-	client, err := sacn.NewSacnClient(config.GetUniverses())
+func NewLightController(config *Config, resetContext context.Context) (*LightController, error) {
+	client, err := sacn.NewSacnClient(config.GetUniverses(), resetContext)
 	if err != nil {
 		return nil, err
 	}
@@ -30,14 +30,14 @@ func NewLightController(config *Config) (*LightController, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid light ID %s: %v", lightConfig.ID, err)
 		}
-		light := NewLight(idBytes, lightConfig.Universe, lightConfig.Address)
+		light := NewLight(idBytes, lightConfig.Universe, lightConfig.Address, resetContext)
 		lights[lightConfig.ID] = light
 	}
 
 	return &LightController{
 		sacnClient: client,
 		lights:     lights,
-		status:     status.NewStatus(false, false),
+		status:     status.NewStatus(false, false, resetContext),
 	}, err
 }
 

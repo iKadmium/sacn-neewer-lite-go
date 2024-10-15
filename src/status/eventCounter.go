@@ -1,6 +1,7 @@
 package status
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -13,7 +14,7 @@ type EventRateCounter struct {
 	last_count int
 }
 
-func NewEventRateCounter(duration time.Duration) *EventRateCounter {
+func NewEventRateCounter(duration time.Duration, resetContext context.Context) *EventRateCounter {
 	erc := &EventRateCounter{
 		duration:   duration,
 		ticker:     time.NewTicker(duration),
@@ -22,7 +23,13 @@ func NewEventRateCounter(duration time.Duration) *EventRateCounter {
 
 	go func() {
 		for range erc.ticker.C {
-			erc.reset()
+			select {
+			case <-resetContext.Done():
+				return
+
+			default:
+				erc.reset()
+			}
 		}
 	}()
 
